@@ -4,7 +4,7 @@ import models
 from models import Todos
 from database import engine, SessionLocal
 from sqlalchemy.orm import Session
-from routers import todos, auth
+from routers import todos, auth, avatar
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
@@ -25,3 +25,4 @@ models.Base.metadata.create_all(bind=engine)
 
 app.include_router(todos.router)
 app.include_router(auth.router)
+app.include_router(avatar.router)

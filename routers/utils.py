@@ -37,44 +37,35 @@ def generateRandomCode():
 
 # Http api to upload image to S3 and return link for display
 def uploadImage(image_name, image_base64):
-
-    try:
-        # Random string to avoid crash of object name
-        randomString = str(uuid.uuid4())
-        bucket_name = os.environ['bucket_name']
-       
-        image_base64 = image_base64[image_base64.find(",")+1:]
-        s3_client = boto3.client("s3", region_name=AWS_REGION, aws_access_key_id=ACCESS_KEY, aws_secret_access_key=SECRET_KEY)
-        decoded_file = io.BytesIO(base64.b64decode(image_base64))
-        s3_client.upload_fileobj(decoded_file, bucket_name, randomString + image_name)
-        
-
-        #get object url after upload to s3
-        object_url = "https://%s.s3.amazonaws.com/%s" % (bucket_name, randomString + image_name )
-        return object_url
     
-    except Exception as e: 
-        print(e)
-        response = {"statusCode": 400, "body": "Invalid Input."}
-        return response
+    # Random string to avoid crash of object name
+    randomString = str(uuid.uuid4())
+    bucket_name = os.environ['bucket_name']
+    
+    image_base64 = image_base64[image_base64.find(",")+1:]
+    s3_client = boto3.client("s3", region_name=AWS_REGION, aws_access_key_id=ACCESS_KEY, aws_secret_access_key=SECRET_KEY)
+    decoded_file = io.BytesIO(base64.b64decode(image_base64))
+    s3_client.upload_fileobj(decoded_file, bucket_name, randomString + image_name)
+    
+
+    #get object url after upload to s3
+    object_url = "https://%s.s3.amazonaws.com/%s" % (bucket_name, randomString + image_name )
+    return object_url
+    
 
 # Http api to create a presigned url for images from exiting image link
-def getUrl(event, context):
-    try:
-        bucket_name = os.environ['bucket_name']
-        image_obj = json.loads(event['body'])
+def  get_url(user_image):
+    bucket_name = os.environ['bucket_name']
+    print(user_image)
 
-        # Reform data into image name and bucket url
-        bucket_url = "https://%s.s3.amazonaws.com/" % (bucket_name)
-        image_name = image_obj['avatorURL'].split("?")[0].replace(bucket_url, "")
-        
-        # Call the function to create presigned url
-        pre_signed_url = create_presigned_url(bucket_name, image_name, 86400)
-        response = {"statusCode": 200, "body":  pre_signed_url}
-        return response
-    except:
-        response = {"statusCode": 400, "body": "Invalid Input."}
-        return response
+    # Reform data into image name and bucket url
+    bucket_url = "https://%s.s3.amazonaws.com/" % (bucket_name)
+    image_name = user_image.split("?")[0].replace(bucket_url, "")
+    
+    # Call the function to create presigned url
+    pre_signed_url = create_presigned_url(bucket_name, image_name, 86400)
+    return pre_signed_url
+    
 
 # Function to create a presigned url
 def create_presigned_url(bucket_name, object_name, expiration=600):

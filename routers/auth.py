@@ -1,5 +1,9 @@
 import json
+import os
+import boto3
+from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, Query
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from models import Users
 from passlib.context import CryptContext
@@ -10,16 +14,15 @@ from database import SessionLocal
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from jose import JWTError, jwt
 from datetime import timedelta, datetime
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
-import boto3
-from botocore.exceptions import ClientError
+# from sendgrid import SendGridAPIClient
+# from sendgrid.helpers.mail import Mail
 from .utils import generateRandomCode, uploadImage
 import google.oauth2.credentials
 import google_auth_oauthlib.flow
-import os
+import re
+
 from googleapiclient.discovery import build
-from dotenv import load_dotenv
+
 
 load_dotenv()
 
@@ -73,11 +76,34 @@ db_dependency = Annotated[Session, Depends(get_db)]
 async def get_user():
     return {'user':'authenticated'}
 
+# Signup function
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=Token)
 async def create_user(db: db_dependency, create_user_request: CreateUserRequest):
+
+    regex = re.search('^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])[a-zA-Z0-9!@#$%^&*]{8,}$',  create_user_request.password)
+    if not regex:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='Password must contain a number, a capital letter, and a small letter without space.')
+
+    regex = re.search('^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|.(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$',  create_user_request.email)
+    if not regex:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='Please enter a valid email address.')
+
+    user = db.query(Users).filter(Users.username == create_user_request.username).first()
+    if user:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='This username has been used.')
+    
+    userEmail = db.query(Users).filter(Users.email == create_user_request.email).first()
+    
+    if userEmail:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='This email has been registered.')
+    
+    
+    
+    
     otp = generateRandomCode()
+    
     user_image = uploadImage(create_user_request.image_name, create_user_request.image)
-    print(user_image)
+    
     create_user_model = Users(
         email=create_user_request.email,
         username=create_user_request.username,
@@ -94,8 +120,11 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
     db.commit()
     token = create_access_token(create_user_model.username, create_user_model.id, timedelta(minutes=20), create_user_model.activated, create_user_model.email)
     sendVerificationEmail(otp, create_user_request.email)
+    
     return {
-        'access_token': token, 'token_type':'bearer', 'user': {
+        'access_token': token, 
+        'token_type':'bearer', 
+        'user': {
             "id": create_user_model.id,
             "username":create_user_model.username,
             "email":create_user_model.email,
@@ -104,6 +133,7 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
             "user_image": create_user_model.user_image
         }
     }
+    
 
 @router.post("/token", status_code=status.HTTP_200_OK, response_model=Token)
 async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
@@ -162,7 +192,7 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_bearer)]):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                                 detail='Could not validate user.')
 
-async def verify_current_user(token: Annotated[str, Depends(oauth2_bearer)]):    
+async def get_current_user_without_verification(token: Annotated[str, Depends(oauth2_bearer)]):    
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get('sub')
@@ -277,7 +307,7 @@ def sendVerificationEmail(verificationCode: str, email: str):
 
 
 
-user_dependency = Annotated[dict, Depends(verify_current_user)]
+user_dependency = Annotated[dict, Depends(get_current_user_without_verification)]
 
 @router.post("/verify", status_code=status.HTTP_200_OK)
 async def verifyCode(user: user_dependency, db: db_dependency, verificationCode: str = Query(min_length=6, max_length=100)):
