@@ -2,7 +2,7 @@
 
 ## Installation
 
-1. Clone the repository, and then install the required libraries:
+1. Clone the repository, setting up python virtual environment[^1], and then install the required libraries:
 ```
 pip install -r requirements.txt
 ```
@@ -23,7 +23,7 @@ pip install -r requirements.txt
 
 <br>
 
-3. Configure OAuth Consent Screen with ```userinfo.email```, ```userinfo.profile```, and ```openid``` scope in Google Cloud Console and create an OAuth 2.0 Client IDs in credentials page. Download the ```client_secret.json``` file[^1] and save into routers/ directory.
+3. Configure OAuth Consent Screen with ```userinfo.email```, ```userinfo.profile```, and ```openid``` scope in Google Cloud Console and create an OAuth 2.0 Client IDs in credentials page. Download the ```client_secret.json``` file[^2] and save into routers/ directory.
 
 ![export client_secret.json](image.png)
 
@@ -37,12 +37,17 @@ Development, run
 uvicorn main:app --reload
 ```
 
-Hosting, run
+Hosting over http, run
 
 ```
-uvicorn main:app --host 0.0.0.0 --port 10000
+uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
+Hosting over https with ssl certificate
+
+```
+uvicorn main:app --port 8000 --ssl-keyfile=/path-to-key.pem --ssl-certfile=/path-to-cert.pem
+```
 
 
 ## APIs
@@ -64,7 +69,7 @@ uvicorn main:app --host 0.0.0.0 --port 10000
 |   POST    |   ```/auth/token```           |   Login in exchange with a jwt token    | No |
 |   POST    |   ```/auth/verify``` |  verify email address by sending 6 digits OTP to this endpoint | Yes |
 |   POST    |   ```/auth/resend```          |   require to resend a verification emails with a new 6 digits OTP  | Yes|
-|   POST    |   ```/auth/register-google``` |   register or login with info getting from google oauth2[^2] | No
+|   POST    |   ```/auth/register-google``` |   register or login with info getting from google oauth2[^3] | No
 
 <br>
 <br>
@@ -143,7 +148,7 @@ Return Data
 | ------------- | ------------- | ------------- | ------------- |
 |   POST    |   ```/auth/resend```          |   require to resend a verification emails with a new 6 digits OTP  | Yes
  |
-|   POST    |   ```/auth/register-google``` |   register or login with info getting from google oauth2[^2] | No
+|   POST    |   ```/auth/register-google``` |   register or login with info getting from google oauth2[^3] | No
 
 JSON Example (from Google Oauth2)
 ```
@@ -172,5 +177,6 @@ Return Data
     }
 }
 ```
-[^1]: https://developers.google.com/api-client-library/dotnet/guide/aaa_client_secrets
-[^2]: https://developers.google.com/identity/protocols/oauth2/web-server#python_4
+[^1]: https://docs.python.org/3/library/venv.html
+[^2]: https://developers.google.com/api-client-library/dotnet/guide/aaa_client_secrets
+[^3]: https://developers.google.com/identity/protocols/oauth2/web-server#python_4

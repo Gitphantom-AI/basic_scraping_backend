@@ -30,3 +30,5 @@ archive.zip
 
 # google login
 /routers/client_secret.json
+
+*.pem
