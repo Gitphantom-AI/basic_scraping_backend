@@ -48,6 +48,7 @@ class CreateUserRequest(BaseModel):
 
 class GoogleLoginRequest(BaseModel):
     code: str
+    redirect_uri: str
 
 class UserData(BaseModel):
     id: int
@@ -352,7 +353,7 @@ async def googleLogin(request_code: GoogleLoginRequest, db: db_dependency):
     flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
     os.path.dirname(__file__) + '/client_secret.json',
     scopes=['openid', "https://www.googleapis.com/auth/userinfo.profile", "https://www.googleapis.com/auth/userinfo.email"],
-    redirect_uri='http://localhost:3000')
+    redirect_uri=request_code.redirect_uri)
 
     flow.fetch_token(code=request_code.code)
     
