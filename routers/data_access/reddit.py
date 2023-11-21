@@ -20,7 +20,6 @@ ACCESS_KEY=os.environ['wasabi_access_key_id']
 SECRET_KEY=os.environ['wasabi_secret_access_key']
 AWS_REGION=os.environ['wasabi_aws-region']
 
-
 def get_db():
     db = SessionLocal()
     try:
@@ -30,7 +29,6 @@ def get_db():
 
 db_dependency = Annotated[Session, Depends(get_db)]
 api_key_dependency = Annotated[str, Depends(get_api_key_header)]
-
 class RedditRequest(BaseModel):
     searchKey: Optional[str] = None
     sortKey: Optional[str] = None
@@ -82,7 +80,7 @@ async def get_latest_reddit(db: db_dependency, api_key: api_key_dependency, redd
     df = get_csv_record(last_record, lower_bound, upper_bound, 'redditscrapingbucket', file_names, pageNumber)
     data = json.loads(df.to_json(orient = "records"))
     end2 = time.time()
-    print(await consume_key(db, api_key))
+    await consume_key(db, api_key)
     return {"totalDuration": (end2 - start), "mongodDuration": (end1 - start), "data": data}
 
 def get_csv_record(last_record: int, lower_bound : int, upper_bound: int, bucket_name, file_names, pageNumber):

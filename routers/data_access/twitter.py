@@ -5,10 +5,13 @@ import json
 import pandas as pd
 
 from pydantic import BaseModel, Field
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from starlette import status
-from typing import Optional
-from server.database import MongoClient
+from typing import Optional, Annotated
+from server.database import MongoClient, SessionLocal
+from sqlalchemy.orm import Session
+
+from ..api_key import consume_key, get_api_key_header
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -17,6 +20,15 @@ ACCESS_KEY=os.environ['wasabi_access_key_id']
 SECRET_KEY=os.environ['wasabi_secret_access_key']
 AWS_REGION=os.environ['wasabi_aws-region']
 
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+db_dependency = Annotated[Session, Depends(get_db)]
+api_key_dependency = Annotated[str, Depends(get_api_key_header)]
 class TwitterRequest(BaseModel):
     searchKey: Optional[str] = None
     sortKey: Optional[str] = None
@@ -27,7 +39,7 @@ router = APIRouter(
 )
 
 @router.get("/get_latest_twitter", status_code=status.HTTP_200_OK)
-async def get_latest_twitter(twitter_request: TwitterRequest, pageSize: int = Query(), pageNumber: int = Query(), sortKey: str = Query):
+async def get_latest_twitter(db: db_dependency, api_key: api_key_dependency, twitter_request: TwitterRequest, pageSize: int = Query(), pageNumber: int = Query(), sortKey: str = Query):
     start = time.time()
     scraping_collection = MongoClient['scraping']['scraping']
     last_record = 0
@@ -68,6 +80,7 @@ async def get_latest_twitter(twitter_request: TwitterRequest, pageSize: int = Qu
     df = get_csv_record(last_record, lower_bound, upper_bound, 'twitterscrapingbucket', file_names, pageNumber)
     data = json.loads(df.to_json(orient = "records"))
     end2 = time.time()
+    await consume_key(db, api_key)
     return {"totalDuration": (start - end2), "mongodDuration": (start - end1), "data": data}
 
 def get_csv_record(last_record: int, lower_bound : int, upper_bound: int, bucket_name, file_names, pageNumber):

@@ -32,3 +32,6 @@ archive.zip
 /routers/client_secret.json
 
 *.pem
+
+#ignore alembic setting
+alembic.ini
