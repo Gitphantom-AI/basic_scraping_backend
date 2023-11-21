@@ -5,12 +5,12 @@ from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, Query
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
-from models import Users
+from server.models import Users
+from server.database import SessionLocal
 from passlib.context import CryptContext
 from starlette import status
 from typing import Annotated
 from sqlalchemy.orm import Session
-from database import SessionLocal
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from jose import JWTError, jwt
 from datetime import timedelta, datetime
@@ -48,6 +48,7 @@ class CreateUserRequest(BaseModel):
 
 class GoogleLoginRequest(BaseModel):
     code: str
+    redirect_uri: str
 
 class UserData(BaseModel):
     id: int
@@ -56,6 +57,7 @@ class UserData(BaseModel):
     role: str
     activated: bool
     user_image: str
+    login_type: str
 
 class Token(BaseModel):
     access_token: str
@@ -118,7 +120,7 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
     )
     db.add(create_user_model)
     db.commit()
-    token = create_access_token(create_user_model.username, create_user_model.id, timedelta(minutes=20), create_user_model.activated, create_user_model.email)
+    token = create_access_token(create_user_model.username, create_user_model.id, timedelta(minutes=180), create_user_model.activated, create_user_model.email)
     sendVerificationEmail(otp, create_user_request.email)
     
     return {
@@ -130,7 +132,8 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
             "email":create_user_model.email,
             "role":create_user_model.role,
             "activated": False,
-            "user_image": create_user_model.user_image
+            "user_image": create_user_model.user_image,
+            "login_type": create_user_model.login_type
         }
     }
     
@@ -142,7 +145,7 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                                 detail='Could not validate user.')
-    token = create_access_token(user.username, user.id, timedelta(minutes=20), user.activated, user.email)
+    token = create_access_token(user.username, user.id, timedelta(minutes=180), user.activated, user.email)
     return {
             'access_token': token, 
             'token_type':'bearer', 
@@ -153,6 +156,7 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
             "role":user.role,
             "activated":user.activated,
             "user_image": user.user_image,
+            "login_type": user.login_type
         }}
 
 def authenticate_user(username: str, password: str, db):
@@ -187,7 +191,7 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_bearer)]):
         if not activated:
             raise HTTPException(status_code=status.HTTP_423_LOCKED,
                                 detail='Please verify your email.')
-        return {'username': username, 'id': user_id}
+        return {'username': username, 'id': user_id }
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                                 detail='Could not validate user.')
@@ -200,7 +204,7 @@ async def get_current_user_without_verification(token: Annotated[str, Depends(oa
         if username is None or user_id is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                                 detail='Could not validate user.')
-        return {'username': username, 'id': user_id}
+        return {'username': username, 'id': user_id }
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                                 detail='Could not validate user.')
@@ -306,7 +310,6 @@ def sendVerificationEmail(verificationCode: str, email: str):
         print(response['MessageId'])
 
 
-
 user_dependency = Annotated[dict, Depends(get_current_user_without_verification)]
 
 @router.post("/verify", status_code=status.HTTP_200_OK)
@@ -349,21 +352,31 @@ async def verifyCode(user: user_dependency, db: db_dependency):
 
 @router.post("/register-google", response_model=Token)
 async def googleLogin(request_code: GoogleLoginRequest, db: db_dependency):
+
     flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
     os.path.dirname(__file__) + '/client_secret.json',
     scopes=['openid', "https://www.googleapis.com/auth/userinfo.profile", "https://www.googleapis.com/auth/userinfo.email"],
-    redirect_uri='http://localhost:3000')
+    redirect_uri=request_code.redirect_uri)
 
+    # Get token with provided code
     flow.fetch_token(code=request_code.code)
-    
     credentials = flow.credentials
-    #return credentials
+    
+    # Use google client to get user profile and email
     user_info_service = build('oauth2', 'v2', credentials=credentials)
     response = user_info_service.userinfo().get().execute()
+    print(response)
     userEmail = response["email"]
+
+    # Get user from database with provided email
     user = db.query(Users).filter(Users.email == userEmail).first()
+    
+    # If not user is found, register a new one
     if user is None:
+
         otp = generateRandomCode()
+
+
         create_user_model = Users(
         email=userEmail,
         username=userEmail,
@@ -374,11 +387,11 @@ async def googleLogin(request_code: GoogleLoginRequest, db: db_dependency):
         verification_code=otp,
         verification_expires=datetime.utcnow() + timedelta(minutes=20),
         login_type="google",
-        user_image=""
+        user_image=response['picture']
         )
         db.add(create_user_model)
         db.commit()
-        token = create_access_token(create_user_model.username, create_user_model.id, timedelta(minutes=20), create_user_model.activated, userEmail)
+        token = create_access_token(create_user_model.username, create_user_model.id, timedelta(minutes=180), create_user_model.activated, userEmail)
         sendVerificationEmail(otp, create_user_model.email)
         return {
                 'access_token': token, 
@@ -390,17 +403,24 @@ async def googleLogin(request_code: GoogleLoginRequest, db: db_dependency):
                 "role":create_user_model.role,
                 "activated":create_user_model.activated,
                 "user_image": create_user_model.user_image,
+                "login_type":create_user_model.login_type,
             }}
     
-    token = create_access_token(user.username, user.id, timedelta(minutes=20), user.activated, userEmail)
-    return {
-            'access_token': token, 
-            'token_type':'bearer', 
-            'user': {
-            "id": user.id,
-            "username":user.username,
-            "email":user.email,
-            "role":user.role,
-            "activated":user.activated,
-            "user_image": user.user_image
-        }}
+    # If login type is google, login user with jwt token
+    if user.login_type == "google":
+        # Create jwt token
+        token = create_access_token(user.username, user.id, timedelta(minutes=180), user.activated, userEmail)
+        return {
+                'access_token': token, 
+                'token_type':'bearer', 
+                'user': {
+                "id": user.id,
+                "username":user.username,
+                "email":user.email,
+                "role":user.role,
+                "activated":user.activated,
+                "user_image": user.user_image,
+                "login_type": user.login_type
+            }}
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='This user is not registered with Google login.')
