@@ -5,12 +5,12 @@ from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, Query
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
-from models import Users
+from server.models import Users
+from server.database import SessionLocal
 from passlib.context import CryptContext
 from starlette import status
 from typing import Annotated
 from sqlalchemy.orm import Session
-from database import SessionLocal
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from jose import JWTError, jwt
 from datetime import timedelta, datetime
@@ -120,7 +120,7 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
     )
     db.add(create_user_model)
     db.commit()
-    token = create_access_token(create_user_model.username, create_user_model.id, timedelta(minutes=20), create_user_model.activated, create_user_model.email)
+    token = create_access_token(create_user_model.username, create_user_model.id, timedelta(minutes=180), create_user_model.activated, create_user_model.email)
     sendVerificationEmail(otp, create_user_request.email)
     
     return {
@@ -145,7 +145,7 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                                 detail='Could not validate user.')
-    token = create_access_token(user.username, user.id, timedelta(minutes=20), user.activated, user.email)
+    token = create_access_token(user.username, user.id, timedelta(minutes=180), user.activated, user.email)
     return {
             'access_token': token, 
             'token_type':'bearer', 
@@ -391,7 +391,7 @@ async def googleLogin(request_code: GoogleLoginRequest, db: db_dependency):
         )
         db.add(create_user_model)
         db.commit()
-        token = create_access_token(create_user_model.username, create_user_model.id, timedelta(minutes=20), create_user_model.activated, userEmail)
+        token = create_access_token(create_user_model.username, create_user_model.id, timedelta(minutes=180), create_user_model.activated, userEmail)
         sendVerificationEmail(otp, create_user_model.email)
         return {
                 'access_token': token, 
@@ -409,7 +409,7 @@ async def googleLogin(request_code: GoogleLoginRequest, db: db_dependency):
     # If login type is google, login user with jwt token
     if user.login_type == "google":
         # Create jwt token
-        token = create_access_token(user.username, user.id, timedelta(minutes=20), user.activated, userEmail)
+        token = create_access_token(user.username, user.id, timedelta(minutes=180), user.activated, userEmail)
         return {
                 'access_token': token, 
                 'token_type':'bearer', 
