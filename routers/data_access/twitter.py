@@ -2,9 +2,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette import status
-from server.database import SessionLocal
-from ..auth import get_current_user
-from typing import Annotated, Optional
+from typing import Optional
 import boto3
 import os
 from dotenv import load_dotenv
@@ -12,7 +10,6 @@ from server.database import MongoClient
 import pandas as pd
 import time
 import json
-
 
 load_dotenv()
  
@@ -29,21 +26,8 @@ router = APIRouter(
     tags=['twitter']
 )
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-db_dependency = Annotated[Session, Depends(get_db)]
-user_dependency = Annotated[dict, Depends(get_current_user)]
-
-
 @router.get("/get_latest_twitter", status_code=status.HTTP_200_OK)
-async def get_latest_twitter(user: user_dependency, twitter_request: TwitterRequest, pageSize: int = Query(), pageNumber: int = Query(), sortKey: str = Query):
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication Failed')
+async def get_latest_twitter(twitter_request: TwitterRequest, pageSize: int = Query(), pageNumber: int = Query(), sortKey: str = Query):
     start = time.time()
     scraping_collection = MongoClient['scraping']['scraping']
     last_record = 0
@@ -82,9 +66,6 @@ async def get_latest_twitter(user: user_dependency, twitter_request: TwitterRequ
         
         else:
             print(cursor)
-            # print(first_record)
-            # print(last_record)
-            # print(cursor["file_name"])
             file_names.append(cursor["file_name"])
     end1= time.time()
     
