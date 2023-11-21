@@ -29,9 +29,9 @@ def get_db():
 
 db_dependency = Annotated[Session, Depends(get_db)]
 api_key_dependency = Annotated[str, Depends(get_api_key_header)]
-class TwitterRequest(BaseModel):
-    searchKey: Optional[str] = None
-    sortKey: Optional[str] = None
+# class TwitterRequest(BaseModel):
+#     searchKey: Optional[str] = None
+#     sortKey: Optional[str] = None
 
 router = APIRouter(
     prefix='/twitter',
@@ -39,12 +39,10 @@ router = APIRouter(
 )
 
 @router.get("/get_latest_twitter", status_code=status.HTTP_200_OK)
-async def get_latest_twitter(db: db_dependency, api_key: api_key_dependency, twitter_request: TwitterRequest, pageSize: int = Query(), pageNumber: int = Query(), sortKey: str = Query):
+async def get_latest_twitter(db: db_dependency, api_key: api_key_dependency, pageSize: int = Query(), pageNumber: int = Query(), sortKey: str | None = Query(default=None), searchKey: str | None = Query(default=None)):
     start = time.time()
     scraping_collection = MongoClient['scraping']['scraping']
     last_record = 0
-    sortKey = twitter_request.sortKey
-    searchKey = twitter_request.searchKey
     # Async for doesn't parallelize the iteration, but using a async source to run
     if sortKey is not None and searchKey is not None:
         results = scraping_collection.find({"source_name":"twitter", "search_keys":[searchKey]}).sort(sortKey)
@@ -60,8 +58,8 @@ async def get_latest_twitter(db: db_dependency, api_key: api_key_dependency, twi
     file_names = []
     
     async for cursor in results:
-
-        if searchKey is None and cursor["row_count"] < 10:
+        # skip small data files
+        if cursor["row_count"] < 10:
             continue
         
         first_record = last_record + 1

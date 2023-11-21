@@ -29,9 +29,9 @@ def get_db():
 
 db_dependency = Annotated[Session, Depends(get_db)]
 api_key_dependency = Annotated[str, Depends(get_api_key_header)]
-class RedditRequest(BaseModel):
-    searchKey: Optional[str] = None
-    sortKey: Optional[str] = None
+# class RedditRequest(BaseModel):
+#     searchKey: Optional[str] = None
+#     sortKey: Optional[str] = None
 
 router = APIRouter(
     prefix='/reddit',
@@ -39,14 +39,12 @@ router = APIRouter(
 )
 
 @router.get("/get_latest_reddit", status_code=status.HTTP_200_OK)
-async def get_latest_reddit(db: db_dependency, api_key: api_key_dependency, reddit_request: RedditRequest, pageSize: int = Query(), pageNumber: int = Query(), sortKey: str = Query):
+async def get_latest_reddit(db: db_dependency, api_key: api_key_dependency, pageSize: int = Query(), pageNumber: int = Query(),  sortKey: str | None = Query(default=None), searchKey: str | None = Query(default=None)):
    
     start = time.time()
     scraping_collection = MongoClient['scraping']['scraping']
     last_record = 0
-    sortKey = reddit_request.sortKey
-    searchKey = reddit_request.searchKey
-    # Async for doesn't parallelize the iteration, but using a async source to run
+    #Async for doesn't parallelize the iteration, but using a async source to run
     if sortKey is not None and searchKey is not None:
         results = scraping_collection.find({"source_name":"reddit", "search_keys":[searchKey]}).sort(sortKey)
     elif sortKey is not None:
@@ -61,7 +59,7 @@ async def get_latest_reddit(db: db_dependency, api_key: api_key_dependency, redd
     file_names = []
     
     async for cursor in results:
-
+        # skip small data files
         if searchKey is None and cursor["row_count"] < 10:
             continue
         
