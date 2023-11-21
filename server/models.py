@@ -18,8 +18,7 @@ class Users(Base):
     login_type = Column(String(16))
     user_image = Column(String(128))
 
-
-
+# Example Model, will be remove later
 class Todos(Base):
     __tablename__ = 'todos'
 
@@ -29,3 +28,11 @@ class Todos(Base):
     priority = Column(Integer)
     complete = Column(Boolean, default=False)
     owner_id = Column(Integer, ForeignKey("users.id"))
+
+class APIKeys(Base):
+    __tablename__ = 'api_keys'
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(32))
+    owner_id = Column(Integer, ForeignKey("users.id"))
+    charge = Column(Integer)

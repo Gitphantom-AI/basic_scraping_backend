@@ -1,16 +1,16 @@
-from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
-from fastapi import APIRouter, Depends, HTTPException, Query
-from starlette import status
-from typing import Optional
-import boto3
 import os
-from dotenv import load_dotenv
-from server.database import MongoClient
-import pandas as pd
+import boto3
 import time
 import json
+import pandas as pd
 
+from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, Query
+from starlette import status
+from typing import Optional
+from server.database import MongoClient
+
+from dotenv import load_dotenv
 load_dotenv()
  
 ACCESS_KEY=os.environ['wasabi_access_key_id']
@@ -39,16 +39,12 @@ async def get_latest_twitter(twitter_request: TwitterRequest, pageSize: int = Qu
     elif sortKey is not None:
         results = scraping_collection.find({"source_name":"twitter"}).sort(sortKey)
     elif searchKey is not None:
-        #print('sort by created at')
         results = scraping_collection.find({"source_name":"twitter", "search_keys":[searchKey]})
     else:
         results = scraping_collection.find({"source_name":"twitter"})
     
     lower_bound = (pageNumber - 1) * pageSize + 1
     upper_bound = lower_bound + pageSize - 1
-    
-    #print(str(lower_bound))
-    #print(str(upper_bound))
     file_names = []
     
     async for cursor in results:
@@ -82,7 +78,6 @@ def get_csv_record(last_record: int, lower_bound : int, upper_bound: int, bucket
                   aws_secret_access_key=SECRET_KEY)
     df = pd.DataFrame()
     for file_name in file_names:
-        #print(file_name)
         obj = s3_client.get_object(Bucket=bucket_name, Key="twitter/"+file_name)
         initial_df = pd.read_csv(obj['Body'])
         df = pd.concat([df, initial_df], ignore_index=True)
@@ -91,15 +86,11 @@ def get_csv_record(last_record: int, lower_bound : int, upper_bound: int, bucket
     total_length = len(df.index)
     cut_tail = last_record - upper_bound
     cut_start = total_length - (last_record - lower_bound) - 1
-    print(last_record)
-    print(total_length)
     df.drop(df.tail(cut_tail).index, inplace = True)
-    print(len(df.index))
     df.drop(index=df.index[:cut_start], inplace=True)
     index_column = range(lower_bound, upper_bound + 1)
     
     # Add index column to first column
-    print(len(df.index))
     df['index'] = index_column
     cols = df.columns.tolist()
     cols = cols[-1:] + cols[:-1]

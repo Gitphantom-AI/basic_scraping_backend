@@ -1,21 +1,35 @@
-from pydantic import BaseModel, Field
-from fastapi import APIRouter, Depends, Query
-from starlette import status
-from typing import Optional
-import boto3
 import os
-from dotenv import load_dotenv
-from server.database import MongoClient
-import pandas as pd
+import boto3
 import time
 import json
+import pandas as pd
 
+from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, Query, HTTPException
+from starlette import status
+from typing import Optional, Annotated
+from server.database import MongoClient, SessionLocal
+from sqlalchemy.orm import Session
 
+from ..api_key import consume_key, get_api_key_header
+
+from dotenv import load_dotenv
 load_dotenv()
  
 ACCESS_KEY=os.environ['wasabi_access_key_id']
 SECRET_KEY=os.environ['wasabi_secret_access_key']
 AWS_REGION=os.environ['wasabi_aws-region']
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+db_dependency = Annotated[Session, Depends(get_db)]
+api_key_dependency = Annotated[str, Depends(get_api_key_header)]
 
 class RedditRequest(BaseModel):
     searchKey: Optional[str] = None
@@ -27,7 +41,7 @@ router = APIRouter(
 )
 
 @router.get("/get_latest_reddit", status_code=status.HTTP_200_OK)
-async def get_latest_reddit( reddit_request: RedditRequest, pageSize: int = Query(), pageNumber: int = Query(), sortKey: str = Query):
+async def get_latest_reddit(db: db_dependency, api_key: api_key_dependency, reddit_request: RedditRequest, pageSize: int = Query(), pageNumber: int = Query(), sortKey: str = Query):
    
     start = time.time()
     scraping_collection = MongoClient['scraping']['scraping']
@@ -68,6 +82,7 @@ async def get_latest_reddit( reddit_request: RedditRequest, pageSize: int = Quer
     df = get_csv_record(last_record, lower_bound, upper_bound, 'redditscrapingbucket', file_names, pageNumber)
     data = json.loads(df.to_json(orient = "records"))
     end2 = time.time()
+    print(await consume_key(db, api_key))
     return {"totalDuration": (end2 - start), "mongodDuration": (end1 - start), "data": data}
 
 def get_csv_record(last_record: int, lower_bound : int, upper_bound: int, bucket_name, file_names, pageNumber):

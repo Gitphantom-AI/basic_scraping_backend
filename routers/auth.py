@@ -1,5 +1,7 @@
 import json
 import os
+import random
+import string
 import boto3
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -20,9 +22,9 @@ from .utils import generateRandomCode, uploadImage
 import google.oauth2.credentials
 import google_auth_oauthlib.flow
 import re
+from .api_key import save_api_key
 
 from googleapiclient.discovery import build
-
 
 load_dotenv()
 
@@ -63,6 +65,9 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     user: UserData
+
+class SavedKey(BaseModel):
+    api_key: str
     
 
 def get_db():
@@ -98,9 +103,6 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
     
     if userEmail:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='This email has been registered.')
-    
-    
-    
     
     otp = generateRandomCode()
     
@@ -424,3 +426,20 @@ async def googleLogin(request_code: GoogleLoginRequest, db: db_dependency):
             }}
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='This user is not registered with Google login.')
+
+#Disable create API key
+@router.post("/key", response_model=SavedKey)
+async def get_new_api_key(db: db_dependency, user: user_dependency):
+    length=32
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication Failed')
+    new_key = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(length))
+    charge = 1000000
+    response = await save_api_key(db, new_key, charge, user)
+    print(response)
+    if response["success"]:
+        return {
+        "api_key": new_key
+        }
+    else:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='Failed to create api key.')
