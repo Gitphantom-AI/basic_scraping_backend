@@ -141,10 +141,6 @@ async def login_for_access_token(form_data: Annotated[security.OAuth2PasswordReq
             "login_type": user.login_type
         }}
 
-
-
-
-
 @router.post("/verify", status_code=status.HTTP_200_OK)
 async def verifyCode(user: user_dependency, db: db_dependency, verificationCode: str = Query(min_length=6, max_length=100)):
     if user is None:

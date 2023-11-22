@@ -1,7 +1,6 @@
 import os
 import boto3
-import time
-import json
+from pymongo.collation import Collation
 import pandas as pd
 
 from server.database import MongoClient
@@ -36,13 +35,13 @@ async def get_files_name(sortKey, searchKey, sortDirection, pageNumber, pageSize
         
         # Filter and sort csv metadata to choose which appropriate csv to fetch
         if sortKey is not None and searchKey is not None:
-            results = scraping_collection.find({"source_name":source_name, "search_keys":[searchKey]}).sort(sortKey, sortDir)
+            results = scraping_collection.find({"source_name":source_name, "search_keys":[searchKey]}).collation(Collation(locale='en_US', strength=1)).sort(sortKey, sortDir)
         elif sortKey is not None:
-            results = scraping_collection.find({"source_name":source_name}).sort(sortKey, sortDir)
+            results = scraping_collection.find({"source_name":source_name }).sort(sortKey, sortDir)
         elif searchKey is not None:
-            results = scraping_collection.find({"source_name":source_name, "search_keys":[searchKey]})
+            results = scraping_collection.find({"source_name":source_name, "search_keys":[searchKey]}).collation(Collation(locale='en_US', strength=1))
         else:
-            results = scraping_collection.find({"source_name":source_name}).sort("created_at", -1)
+            results = scraping_collection.find({"source_name":source_name }).sort("created_at", -1)
         
         # Get files name of required csv of selected page
         lower_bound = (pageNumber - 1) * pageSize + 1
@@ -53,6 +52,7 @@ async def get_files_name(sortKey, searchKey, sortDirection, pageNumber, pageSize
         # Async for doesn't parallelize the iteration, but using a async source to run
 
         async for cursor in results:
+            print(cursor)
             # skip small data files
             if searchKey is None and cursor["row_count"] < 10:
                 continue
@@ -70,7 +70,8 @@ async def get_files_name(sortKey, searchKey, sortDirection, pageNumber, pageSize
         return last_record, file_names
     except Exception as e:
         print("Error: fail to fetch data from Mongodb database.")
-        return {"error":"fail to fetch data from Mongodb database.", "message":e}
+        print(e)
+        raise Exception("Error: fail to fetch data from Mongodb database. Message: " + str(e))
 
 @timing
 def get_csv_record(last_record: int, lower_bound : int, upper_bound: int, bucket_name, file_names, pageNumber, prefix):
@@ -101,5 +102,4 @@ def get_csv_record(last_record: int, lower_bound : int, upper_bound: int, bucket
         return df
     except Exception as e:
         print("Error: fail to get csv files from Wasabi bucket.")
-        return {"error":"fail to get csv files from Wasabi bucket.", "message":e}
-    
+        raise Exception("Error: fail to get csv files from Wasabi bucket. Message: " + str(e))
