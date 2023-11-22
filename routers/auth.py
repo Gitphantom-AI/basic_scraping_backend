@@ -194,7 +194,7 @@ async def googleLogin(request_code: GoogleLoginRequest, db: db_dependency):
     # Use google client to get user profile and email
     user_info_service = build('oauth2', 'v2', credentials=credentials)
     response = user_info_service.userinfo().get().execute()
-    print(response)
+    #print(response)
     userEmail = response["email"]
 
     # Get user from database with provided email
@@ -263,7 +263,7 @@ async def get_new_api_key(db: db_dependency, user: user_dependency):
     new_key = random_generator.generateRandomKey(length)
     charge = 1000000
     response = await api_key_utils.save_api_key(db, new_key, charge, user)
-    print(response)
+    #print(response)
     if response["success"]:
         return {
         "api_key": new_key

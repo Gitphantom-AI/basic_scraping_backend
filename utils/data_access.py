@@ -52,7 +52,7 @@ async def get_files_name(sortKey, searchKey, sortDirection, pageNumber, pageSize
         # Async for doesn't parallelize the iteration, but using a async source to run
 
         async for cursor in results:
-            print(cursor)
+            #print(cursor)
             # skip small data files
             if searchKey is None and cursor["row_count"] < 10:
                 continue

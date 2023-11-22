@@ -61,6 +61,8 @@ uvicorn main:app --port 8000 --ssl-keyfile=/path-to-key.pem --ssl-certfile=/path
 Options as query parameters
 | Parameters | Options | Default | Required |
 | ------------- | ------------- | ------------- | ------------- |
+|   pageSize    |   Integer                             |  None | yes
+|   pageNumber  |   Integer                             |  None | yes
 |   sortKey     |   "created_at" \| String              |  None | no
 |   sortDirect  |   "desc" \| "asc"                         |  "asc" | no
 |   searchKey   |   String  |  None | no
