@@ -31,11 +31,11 @@ router = APIRouter(
 
 class RedditData(BaseModel):
     index: int
-    id: Optional[str]= None
-    url: Optional[str]= None
-    text: Optional[str]= None
-    likes: Optional[int]= None
-    dataType: Optional[str]= None
+    id: Optional[str] = None
+    url: Optional[str] = None
+    text: Optional[str] = None
+    likes: Optional[int] = None
+    dataType: Optional[str] = None
     timestamp: Optional[str] = None
 class RedditModel(BaseModel):
     total_csv_read: int
