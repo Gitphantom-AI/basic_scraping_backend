@@ -39,25 +39,32 @@ router = APIRouter(
 )
 
 @router.get("/get_latest_reddit", status_code=status.HTTP_200_OK)
-async def get_latest_reddit(db: db_dependency, api_key: api_key_dependency, pageSize: int = Query(), pageNumber: int = Query(),  sortKey: str | None = Query(default=None), searchKey: str | None = Query(default=None)):
-   
+async def get_latest_reddit(db: db_dependency, api_key: api_key_dependency, pageSize: int = Query(), pageNumber: int = Query(),  sortKey: str | None = Query(default=None), searchKey: str | None = Query(default=None), sortDirection: str| None = Query(default="asc")):
+    
     start = time.time()
     scraping_collection = MongoClient['scraping']['scraping']
     last_record = 0
-    #Async for doesn't parallelize the iteration, but using a async source to run
+    sortDir = 1
+    if sortDirection == "desc":
+        sortDir = -1
+    
+    # Filter and sort csv metadata to choose which appropriate csv to fetch
     if sortKey is not None and searchKey is not None:
-        results = scraping_collection.find({"source_name":"reddit", "search_keys":[searchKey]}).sort(sortKey)
+        results = scraping_collection.find({"source_name":"reddit", "search_keys":[searchKey]}).sort(sortKey, sortDir)
     elif sortKey is not None:
-        results = scraping_collection.find({"source_name":"reddit"}).sort(sortKey)
+        results = scraping_collection.find({"source_name":"reddit"}).sort(sortKey, sortDir)
     elif searchKey is not None:
         results = scraping_collection.find({"source_name":"reddit", "search_keys":[searchKey]})
     else:
         results = scraping_collection.find({"source_name":"reddit"}).sort("created_at", -1)
     
+    # Get files name of required csv of selected page
     lower_bound = (pageNumber - 1) * pageSize + 1
     upper_bound = lower_bound + pageSize - 1
     file_names = []
-    
+
+    # Async for doesn't parallelize the iteration, but using a async source to run
+
     async for cursor in results:
         print(cursor)
         # skip small data files
@@ -74,13 +81,14 @@ async def get_latest_reddit(db: db_dependency, api_key: api_key_dependency, page
         
         else:
             file_names.append(cursor["file_name"])
-    end1= time.time()
+    
+    end_of_getting_files_name= time.time()
     
     df = get_csv_record(last_record, lower_bound, upper_bound, 'redditscrapingbucket', file_names, pageNumber)
     data = json.loads(df.to_json(orient = "records"))
-    end2 = time.time()
+    end_of_getting_csv_files = time.time()
     await consume_key(db, api_key)
-    return {"totalDuration": (end2 - start), "mongodDuration": (end1 - start), "data": data}
+    return {"totalDuration": (end_of_getting_csv_files - start), "mongodDuration": (end_of_getting_files_name - start), "data": data}
 
 def get_csv_record(last_record: int, lower_bound : int, upper_bound: int, bucket_name, file_names, pageNumber):
     s3_client = boto3.client('s3',

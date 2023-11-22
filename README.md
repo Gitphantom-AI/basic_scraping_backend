@@ -52,6 +52,20 @@ uvicorn main:app --port 8000 --ssl-keyfile=/path-to-key.pem --ssl-certfile=/path
 
 ## APIs
 
+### Reddit/Twitter
+| Method | Path | Description| Required API Key |
+| ------------- | ------------- | ------------- | ------------- |
+|   GET    |   ```/reddit/get_latest_reddit```                 |  getting reddit data | yes
+|   GET    |   ```/reddit/get_latest_twitter```                 |  getting twitter data | yes
+
+Options as query parameters
+| Parameters | Options | Default | Required |
+| ------------- | ------------- | ------------- | ------------- |
+|   sortKey     |   "created_at" \| String              |  None | no
+|   sortDirect  |   "desc" \| "asc"                         |  "asc" | no
+|   searchKey   |   String  |  None | no
+
+
 ### User profile
 
 | Method | Path | Description| Require JWT Token |
