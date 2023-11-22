@@ -51,7 +51,7 @@ async def get_latest_twitter(db: db_dependency, api_key: api_key_dependency, pag
     elif searchKey is not None:
         results = scraping_collection.find({"source_name":"twitter", "search_keys":[searchKey]})
     else:
-        results = scraping_collection.find({"source_name":"twitter"})
+        results = scraping_collection.find({"source_name":"twitter"}).sort("created_at", -1)
     
     lower_bound = (pageNumber - 1) * pageSize + 1
     upper_bound = lower_bound + pageSize - 1

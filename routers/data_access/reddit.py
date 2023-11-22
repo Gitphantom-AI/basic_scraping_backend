@@ -52,13 +52,14 @@ async def get_latest_reddit(db: db_dependency, api_key: api_key_dependency, page
     elif searchKey is not None:
         results = scraping_collection.find({"source_name":"reddit", "search_keys":[searchKey]})
     else:
-        results = scraping_collection.find({"source_name":"reddit"})
+        results = scraping_collection.find({"source_name":"reddit"}).sort("created_at", -1)
     
     lower_bound = (pageNumber - 1) * pageSize + 1
     upper_bound = lower_bound + pageSize - 1
     file_names = []
     
     async for cursor in results:
+        print(cursor)
         # skip small data files
         if searchKey is None and cursor["row_count"] < 10:
             continue
