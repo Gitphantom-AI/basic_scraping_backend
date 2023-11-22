@@ -1,4 +1,3 @@
-import os
 from fastapi import APIRouter, Depends, HTTPException, Query
 from server.database import SessionLocal
 from typing import Annotated

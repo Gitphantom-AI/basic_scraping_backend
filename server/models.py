@@ -18,17 +18,6 @@ class Users(Base):
     login_type = Column(String(16))
     user_image = Column(String(128))
 
-# Example Model, will be remove later
-class Todos(Base):
-    __tablename__ = 'todos'
-
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(64))
-    description = Column(String(64))
-    priority = Column(Integer)
-    complete = Column(Boolean, default=False)
-    owner_id = Column(Integer, ForeignKey("users.id"))
-
 class APIKeys(Base):
     __tablename__ = 'api_keys'
 

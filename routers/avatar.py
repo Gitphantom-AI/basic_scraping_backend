@@ -2,11 +2,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, Path
 from starlette import status
-from server.models import Todos
 from server.database import SessionLocal
-from .auth import get_current_user_without_verification, Users
+from utils.auth import get_current_user_without_verification, Users
 from typing import Annotated
-from .utils import get_url
+from utils.image import get_url
 
 router = APIRouter()
 

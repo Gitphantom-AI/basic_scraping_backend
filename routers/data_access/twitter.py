@@ -1,5 +1,3 @@
-import os
-import boto3
 import time
 import json
 import pandas as pd
@@ -7,18 +5,11 @@ import pandas as pd
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, Query, HTTPException
 from starlette import status
-from typing import Optional, Annotated
+from typing import  Annotated
 from server.database import MongoClient, SessionLocal
 from sqlalchemy.orm import Session
 
-from ..api_key import consume_key, get_api_key_header
-
-from dotenv import load_dotenv
-load_dotenv()
- 
-ACCESS_KEY=os.environ['wasabi_access_key_id']
-SECRET_KEY=os.environ['wasabi_secret_access_key']
-AWS_REGION=os.environ['wasabi_aws-region']
+from utils import api_key_utils, data_access
 
 def get_db():
     db = SessionLocal()
@@ -28,8 +19,8 @@ def get_db():
         db.close()
 
 db_dependency = Annotated[Session, Depends(get_db)]
-api_key_dependency = Annotated[str, Depends(get_api_key_header)]
-# class TwitterRequest(BaseModel):
+api_key_dependency = Annotated[str, Depends(api_key_utils.get_api_key_header)]
+# class twitterRequest(BaseModel):
 #     searchKey: Optional[str] = None
 #     sortKey: Optional[str] = None
 
@@ -39,72 +30,26 @@ router = APIRouter(
 )
 
 @router.get("/get_latest_twitter", status_code=status.HTTP_200_OK)
-async def get_latest_twitter(db: db_dependency, api_key: api_key_dependency, pageSize: int = Query(), pageNumber: int = Query(), sortKey: str | None = Query(default=None), searchKey: str | None = Query(default=None)):
-    start = time.time()
-    scraping_collection = MongoClient['scraping']['scraping']
-    last_record = 0
-    # Async for doesn't parallelize the iteration, but using a async source to run
-    if sortKey is not None and searchKey is not None:
-        results = scraping_collection.find({"source_name":"twitter", "search_keys":[searchKey]}).sort(sortKey)
-    elif sortKey is not None:
-        results = scraping_collection.find({"source_name":"twitter"}).sort(sortKey)
-    elif searchKey is not None:
-        results = scraping_collection.find({"source_name":"twitter", "search_keys":[searchKey]})
-    else:
-        results = scraping_collection.find({"source_name":"twitter"}).sort("created_at", -1)
-    
-    lower_bound = (pageNumber - 1) * pageSize + 1
-    upper_bound = lower_bound + pageSize - 1
-    file_names = []
-    
-    async for cursor in results:
-        # skip small data files
-        if cursor["row_count"] < 10:
-            continue
-        
-        first_record = last_record + 1
-        last_record = first_record + cursor["row_count"] - 1
-        if first_record > upper_bound:
-            last_record = first_record - 1
-            break
-        if last_record < lower_bound or cursor["row_count"] == 0:
-            continue
-        
-        else:
-            print(cursor)
-            file_names.append(cursor["file_name"])
-    end1= time.time()
-    
-    df = get_csv_record(last_record, lower_bound, upper_bound, 'twitterscrapingbucket', file_names, pageNumber)
-    data = json.loads(df.to_json(orient = "records"))
-    end2 = time.time()
-    await consume_key(db, api_key)
-    return {"totalDuration": (start - end2), "mongodDuration": (start - end1), "data": data}
+async def get_latest_twitter(db: db_dependency, api_key: api_key_dependency, pageSize: int = Query(), pageNumber: int = Query(),  sortKey: str | None = Query(default=None), searchKey: str | None = Query(default=None), sortDirection: str| None = Query(default="asc")):
+    try:
 
-def get_csv_record(last_record: int, lower_bound : int, upper_bound: int, bucket_name, file_names, pageNumber):
-    s3_client = boto3.client('s3',
-                  endpoint_url='https://s3.us-central-1.wasabisys.com',
-                  region_name='us-central-1',
-                  aws_access_key_id=ACCESS_KEY,
-                  aws_secret_access_key=SECRET_KEY)
-    df = pd.DataFrame()
-    for file_name in file_names:
-        obj = s3_client.get_object(Bucket=bucket_name, Key="twitter/"+file_name)
-        initial_df = pd.read_csv(obj['Body'])
-        df = pd.concat([df, initial_df], ignore_index=True)
+        
+        lower_bound = (pageNumber - 1) * pageSize + 1
+        upper_bound = lower_bound + pageSize - 1
 
-    # Cutting rows that are outside page    
-    total_length = len(df.index)
-    cut_tail = last_record - upper_bound
-    cut_start = total_length - (last_record - lower_bound) - 1
-    df.drop(df.tail(cut_tail).index, inplace = True)
-    df.drop(index=df.index[:cut_start], inplace=True)
-    index_column = range(lower_bound, upper_bound + 1)
-    
-    # Add index column to first column
-    df['index'] = index_column
-    cols = df.columns.tolist()
-    cols = cols[-1:] + cols[:-1]
-    df = df[cols]
-    return df
-    
+        start = time.time()
+        last_record, file_names = await data_access.get_files_name(sortKey, searchKey, sortDirection, pageNumber, pageSize, "twitter")
+        end_of_getting_files_name= time.time()
+
+        df = data_access.get_csv_record(last_record, lower_bound, upper_bound, 'twitterscrapingbucket', file_names, pageNumber, "twitter/")
+        data = json.loads(df.to_json(orient = "records"))
+        end_of_getting_csv_files = time.time()
+        await api_key_utils.consume_key(db, api_key)
+
+        return {
+                "total csv read":len(file_names), "total duration": (end_of_getting_csv_files - start), "reading mongodb duration": (end_of_getting_files_name - start), "reading S3 duration": (end_of_getting_csv_files - end_of_getting_files_name),
+                "data": data
+                }
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Server Error, please try again.')
