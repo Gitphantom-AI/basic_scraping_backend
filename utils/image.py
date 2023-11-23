@@ -1,5 +1,3 @@
-import random
-import math
 import os
 import boto3
 import base64
@@ -12,25 +10,6 @@ load_dotenv()
 ACCESS_KEY=os.environ['aws_access_key_id_s3']
 SECRET_KEY=os.environ['aws_secret_access_key_s3']
 AWS_REGION=os.environ['aws_region']
-
-def generateRandomCode():
-    ## storing strings in a list
-    digits = [i for i in range(0, 10)]
-
-    ## initializing a string
-    random_str = ""
-
-    ## we can generate any lenght of string we want
-    for i in range(6):
-    ## generating a random index
-    ## if we multiply with 10 it will generate a number between 0 and 10 not including 10
-    ## multiply the random.random() with length of your base list or str
-        index = math.floor(random.random() * 10)
-
-        random_str += str(digits[index])
-
-    ## displaying the random string
-    return random_str
 
 
 
@@ -64,7 +43,6 @@ def  get_url(user_image):
     # Call the function to create presigned url
     pre_signed_url = create_presigned_url(bucket_name, image_name, 86400)
     return pre_signed_url
-    
 
 # Function to create a presigned url
 def create_presigned_url(bucket_name, object_name, expiration=600):
