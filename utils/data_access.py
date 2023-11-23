@@ -24,15 +24,14 @@ s3_client = session.client('s3',
                 aws_secret_access_key=SECRET_KEY)
 
 @timing
-async def get_files_name(sortKey, searchKey, sortDirection, pageNumber, pageSize, source_name):
+async def get_files_name(sortKey, searchKey, sortDirection, lower_bound, upper_bound, source_name):
     try:
         scraping_collection = MongoClient['scraping']['scraping']
-        first_record = 0
-        last_record = 0
+        first_row_number_of_file = 0
+        last_row_number_of_file = 0
         sortDir = 1
         if sortDirection == "desc":
             sortDir = -1
-        
         # Filter and sort csv metadata to choose which appropriate csv to fetch
         if sortKey is not None and searchKey is not None:
             results = scraping_collection.find({"source_name":source_name, "search_keys":[searchKey]}).collation(Collation(locale='en_US', strength=1)).sort(sortKey, sortDir)
@@ -44,10 +43,8 @@ async def get_files_name(sortKey, searchKey, sortDirection, pageNumber, pageSize
             results = scraping_collection.find({"source_name":source_name }).sort("created_at", -1)
         
         # Get files name of required csv of selected page
-        lower_bound = (pageNumber - 1) * pageSize + 1
-        upper_bound = lower_bound + pageSize - 1
-        file_names = []
         
+        file_names = []
 
         # Async for doesn't parallelize the iteration, but using a async source to run
 
@@ -57,49 +54,60 @@ async def get_files_name(sortKey, searchKey, sortDirection, pageNumber, pageSize
             if searchKey is None and cursor["row_count"] < 10:
                 continue
             
-            first_record = last_record + 1
-            last_record = first_record + int(cursor["row_count"]) - 1
-            if first_record > upper_bound:
-                last_record = first_record - 1
+            first_row_number_of_file = last_row_number_of_file + 1
+            last_row_number_of_file = first_row_number_of_file + int(cursor["row_count"]) - 1
+            if first_row_number_of_file > upper_bound:
+                last_row_number_of_file = first_row_number_of_file - 1
                 break
-            if last_record < lower_bound or int(cursor["row_count"]) == 0:
+            if last_row_number_of_file < lower_bound or int(cursor["row_count"]) == 0:
                 continue
             
             else:
                 file_names.append(cursor["file_name"])
-        return last_record, file_names
+        return last_row_number_of_file, file_names
     except Exception as e:
         print("Error: fail to fetch data from Mongodb database.")
         print(e)
         raise Exception("Error: fail to fetch data from Mongodb database. Message: " + str(e))
 
 @timing
-def get_csv_record(last_record: int, lower_bound : int, upper_bound: int, bucket_name, file_names, pageNumber, prefix):
+async def get_csv_record(last_row_number_of_file: int, lower_bound : int, upper_bound: int, bucket_name, file_names, prefix):
     try:
         df = pd.DataFrame()
+        
         # Define Method for each csv file
         def download_object(key):
             obj = s3_client.get_object(Bucket=bucket_name, Key=prefix + key)
             df = pd.read_csv(obj['Body'])
+            df['csv_file'] = key
             return df
         
         for result in parallel_multithreading(download_object, file_names):
             df = pd.concat([df, result], ignore_index=True)
 
-        # Cutting rows that are outside page    
+        # Identify and drop duplicates, keeping the first occurrence
+        duplicates = df[df.duplicated(subset=["url"], keep='first')]
+        duplicates_length = len(duplicates.index)
         total_length = len(df.index)
-        cut_tail = last_record - upper_bound
-        cut_start = total_length - (last_record - lower_bound) - 1
+        cut_tail = last_row_number_of_file - upper_bound
+        cut_start = total_length - (last_row_number_of_file - lower_bound) - 1
         df.drop(df.tail(cut_tail).index, inplace = True)
         df.drop(index=df.index[:cut_start], inplace=True)
-        index_column = range(lower_bound, upper_bound + 1)
         
-        # Add index column to first column
-        df['index'] = index_column
-        cols = df.columns.tolist()
-        cols = cols[-1:] + cols[:-1]
-        df = df[cols]
-        return df
+        #df = add_index_column(df, lower_bound)
+        return df, duplicates_length
     except Exception as e:
         print("Error: fail to get csv files from Wasabi bucket.")
         raise Exception("Error: fail to get csv files from Wasabi bucket. Message: " + str(e))
+
+async def add_index_column(df, lower_bound):
+    # Add index column to first column
+    current_df_length = len(df.index)
+    index_column = range(lower_bound, lower_bound + current_df_length)
+    df['index'] = index_column
+
+    # Change last column to first
+    cols = df.columns.tolist()
+    cols = cols[-1:] + cols[:-1]
+    df = df[cols]
+    return df
