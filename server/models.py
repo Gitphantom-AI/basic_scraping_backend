@@ -18,6 +18,10 @@ class Users(Base):
     login_type = Column(String(16))
     user_image = Column(String(128))
 
+    created_date = Column(DateTime, default=datetime.now())
+    plan = Column(String(4), default="free")
+    plan_expires_date = Column(DateTime, default=datetime.now())
+
 class APIKeys(Base):
     __tablename__ = 'api_keys'
 
@@ -25,3 +29,5 @@ class APIKeys(Base):
     key = Column(String(32))
     owner_id = Column(Integer, ForeignKey("users.id"))
     charge = Column(Integer)
+
+    key_renewal_date = Column(DateTime, default=datetime.now())

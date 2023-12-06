@@ -21,7 +21,9 @@ router = APIRouter(
 )
 
 bcrpyt_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
-user_dependency = Annotated[dict, Depends(auth.get_current_user_without_verification)]
+user_dependency_without_verification = Annotated[dict, Depends(auth.get_current_user_without_verification)]
+user_dependency = Annotated[dict, Depends(auth.get_current_user)]
+forget_password_dependency = Annotated[dict, Depends(auth.verify_forget_password_token)]
 class CreateUserRequest(BaseModel):
     username: str = Field(min_length=6)
     email: str
@@ -50,7 +52,23 @@ class Token(BaseModel):
 
 class SavedKey(BaseModel):
     api_key: str
+
+class ResetPasswordRequest(BaseModel):
+    username: str
+    password: str
+    new_password: str
+
+class NewPasswordRequest(BaseModel):
+    new_password: str
     
+class ForgetPasswordRequest(BaseModel):
+    email: str
+
+class NewUsernameRequest(BaseModel):
+    new_username: str
+
+class NewEmailRequest(BaseModel):
+    new_email: str
 
 def get_db():
     db = SessionLocal()
@@ -102,6 +120,7 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
     )
     db.add(create_user_model)
     db.commit()
+    await get_new_api_key(db, create_user_model)
     token = auth.create_access_token(create_user_model.username, create_user_model.id, timedelta(minutes=180), create_user_model.activated, create_user_model.email)
     email.sendVerificationEmail(otp, create_user_request.email)
     
@@ -142,7 +161,7 @@ async def login_for_access_token(form_data: Annotated[security.OAuth2PasswordReq
         }}
 
 @router.post("/verify", status_code=status.HTTP_200_OK)
-async def verifyCode(user: user_dependency, db: db_dependency, verificationCode: str = Query(min_length=6, max_length=100)):
+async def verifyCode(user: user_dependency_without_verification, db: db_dependency, verificationCode: str = Query(min_length=6, max_length=100)):
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication Failed')
     user_model = db.query(Users).filter(Users.id == user.get('id')).first()
@@ -161,7 +180,7 @@ async def verifyCode(user: user_dependency, db: db_dependency, verificationCode:
     return { 'message': 'success', 'details':'Your account has be activated.'}
     
 @router.post("/resend", status_code=status.HTTP_200_OK)
-async def verifyCode(user: user_dependency, db: db_dependency):
+async def verifyCode(user: user_dependency_without_verification, db: db_dependency):
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication Failed')
     user_model = db.query(Users).filter(Users.id == user.get('id')).first()
@@ -220,6 +239,7 @@ async def googleLogin(request_code: GoogleLoginRequest, db: db_dependency):
         )
         db.add(create_user_model)
         db.commit()
+        await get_new_api_key(db, create_user_model)
         token = auth.create_access_token(create_user_model.username, create_user_model.id, timedelta(minutes=180), create_user_model.activated, userEmail)
         email.sendVerificationEmail(otp, create_user_model.email)
         return {
@@ -256,12 +276,10 @@ async def googleLogin(request_code: GoogleLoginRequest, db: db_dependency):
 
 #Disable create API key
 #@router.post("/key", response_model=SavedKey)
-async def get_new_api_key(db: db_dependency, user: user_dependency):
+async def get_new_api_key(db: db_dependency, user: Users):
     length=32
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication Failed')
     new_key = random_generator.generateRandomKey(length)
-    charge = 1000000
+    charge = 1000
     response = await api_key_utils.save_api_key(db, new_key, charge, user)
     #print(response)
     if response["success"]:
@@ -270,3 +288,101 @@ async def get_new_api_key(db: db_dependency, user: user_dependency):
         }
     else:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='Failed to create api key.')
+    
+@router.put("/reset_password", status_code=status.HTTP_200_OK)
+async def reset_password(reset_password_request: ResetPasswordRequest, db: db_dependency, user: user_dependency):
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication Failed')
+    if user.get('username') != reset_password_request.username:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication Failed')
+    auth_user = auth.authenticate_user(reset_password_request.username, reset_password_request.password, db)
+    if not auth_user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication Failed')
+    if not regex.verify_password_schema(reset_password_request.new_password):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='Password must contain a number, a capital letter, and a small letter without space.')
+    user_model = db.query(Users).filter(Users.id == user.get('id')).first()
+    user_model.hashed_password = bcrpyt_context.hash(reset_password_request.new_password)
+    db.add(user_model)
+    db.commit()
+    return{
+        "message": "Success"
+    }
+
+@router.post("/forget_password", status_code=status.HTTP_200_OK)
+async def forget_password(db: db_dependency, forget_password_request: ForgetPasswordRequest):
+    user_email = forget_password_request.email
+    print(user_email)
+    user_model = db.query(Users).filter(Users.email ==  user_email).first()
+    if user_model is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='No user found with this email.')
+    if user_model.login_type == 'google':
+        raise HTTPException(status_code=status.HTTP_405_METHOD_NOT_ALLOWED, detail='This email is not registered with a password.')
+    client_domain = os.environ['client_domain']
+    token = auth.create_forget_password_token(user_model.id, timedelta(minutes=20), user_model.email)
+    email.sendResetPasswordEmail(token, user_model.email, client_domain)
+    return{
+        "message": "Success"
+    }
+
+@router.put("/forget_password", status_code=status.HTTP_200_OK)
+async def forget_password(db: db_dependency, token: forget_password_dependency, new_password_request: NewPasswordRequest):
+    if token is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication Failed')
+    if not regex.verify_password_schema(new_password_request.new_password):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='Password must contain a number, a capital letter, and a small letter without space.')
+    user_model = db.query(Users).filter(Users.id == token.get('id')).first()
+    auth_user = auth.authenticate_user(user_model.username, new_password_request.new_password, db)
+    if auth_user:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='New password must not be the same as previous.') 
+    user_model.hashed_password = bcrpyt_context.hash(new_password_request.new_password)
+    db.add(user_model)
+    db.commit()
+    return{
+        "message": "Success"
+    }
+
+@router.put("/username", status_code=status.HTTP_200_OK)
+async def change_username(new_username_request: NewUsernameRequest, db: db_dependency, user: user_dependency):
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication Failed')
+    user_model = db.query(Users).filter(Users.id == user.get('id')).first()
+    if user_model.username == new_username_request.new_username:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='New username must not be the same as previous.') 
+    existing_username = db.query(Users).filter(Users.username == new_username_request.new_username).first()
+    if existing_username:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='This username has been used.')
+    user_model.username = new_username_request.new_username
+    db.add(user_model)
+    db.commit()
+    return{
+        "message": "Success"
+    }
+
+@router.post("/change_email", status_code=status.HTTP_200_OK)
+async def change_email(new_email_request: NewEmailRequest, db: db_dependency, user: user_dependency):
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication Failed')
+    user_model = db.query(Users).filter(Users.email == new_email_request.new_email).first()
+    if user_model is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='This email has been used.')
+    user_model = db.query(Users).filter(Users.id == user.get('id')).first()
+    server_domain = os.environ['server_domain']
+    token = auth.create_change_email_token(user_model.id, timedelta(minutes=20), user_model.email, new_email_request.new_email)
+    email.sendChangeEmailEmail(token, new_email_request.new_email, server_domain)
+    return{
+        "message": "Success, please verify your new email in 20 minutes."
+    }
+
+@router.get("/change_email", status_code=status.HTTP_200_OK)
+async def change_email(db: db_dependency, token: str = Query()):
+    user = await auth.verify_change_email_token(token)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication Failed')
+    user_model = db.query(Users).filter(Users.id == user.get('id')).first()
+    new_email = user.get('new_email')
+    user_model.email = new_email
+    db.add(user_model)
+    db.commit()
+    return{
+        "message": "Success"
+    }

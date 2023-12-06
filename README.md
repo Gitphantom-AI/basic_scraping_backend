@@ -47,6 +47,7 @@ Hosting over https with ssl certificate
 
 ```
 uvicorn main:app --port 8000 --ssl-keyfile=/path-to-key.pem --ssl-certfile=/path-to-cert.pem
+
 ```
 
 

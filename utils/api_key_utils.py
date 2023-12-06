@@ -1,10 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from server.database import SessionLocal
+from server.models import Users
 from typing import Annotated
 from sqlalchemy.orm import Session
 from server.models import APIKeys
 from fastapi.security.api_key import APIKeyHeader
 from starlette import status
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+
 
 def get_db():
     db = SessionLocal()
@@ -53,12 +57,13 @@ async def consume_key(db: db_dependency, key: str):
 
 
 # Save Key
-async def save_api_key(db: db_dependency, key: str, charge: int, user):
+async def save_api_key(db: db_dependency, key: str, charge: int, user: Users):
     try:
         create_api_Key_model = APIKeys(
             key=key,
-            owner_id=user["id"],
-            charge=charge
+            owner_id=user.id,
+            charge=charge,
+            key_renewal_date=datetime.utcnow() + relativedelta(months=+1),
         )
         db.add(create_api_Key_model)
         db.commit()
