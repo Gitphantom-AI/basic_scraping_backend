@@ -95,9 +95,11 @@ def create_forget_password_token(user_id: int, expires_delta: timedelta, email: 
 async def verify_forget_password_token(token: Annotated[str, Depends(oauth2_bearer)], db: db_dependency):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        forget_password: bool = payload.get('forget_password')
+        
         user_id: int = payload.get('id')
-        if not forget_password:
+        # Prevent using change email token to reset password
+        change_email: bool = payload.get('change_email')
+        if change_email:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                                 detail='Token is not for resetting password.')
         if user_id is None:

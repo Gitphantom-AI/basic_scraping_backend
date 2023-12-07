@@ -1,7 +1,7 @@
 import os
 from fastapi import APIRouter, Depends, HTTPException, Query, security
 from pydantic import BaseModel, Field
-from server.models import Users
+from server.models import Users, APIKeys
 from server.database import SessionLocal
 from passlib.context import CryptContext
 from starlette import status
@@ -69,6 +69,10 @@ class NewUsernameRequest(BaseModel):
 
 class NewEmailRequest(BaseModel):
     new_email: str
+
+class NewAvatarRequest(BaseModel):
+    image: str
+    image_name: str
 
 def get_db():
     db = SessionLocal()
@@ -385,4 +389,53 @@ async def change_email(db: db_dependency, token: str = Query()):
     db.commit()
     return{
         "message": "Success"
+    }
+
+@router.put("/change_avatar", status_code=status.HTTP_200_OK)
+async def change_avatar(db: db_dependency, user: user_dependency, update_avatar_request: NewAvatarRequest):
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication Failed')
+    user_model = db.query(Users).filter(Users.id == user.get('id')).first()
+    user_image = image.uploadImage(update_avatar_request.image_name, update_avatar_request.image)
+    user_model.user_image = user_image
+    db.add(user_model)
+    db.commit()
+    return{
+        "message": "Success",
+        "user_image": user_image
+    }
+
+@router.put("/renew_api_key", status_code=status.HTTP_200_OK)
+async def renew_api_key(db: db_dependency, user: user_dependency):
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication Failed')
+    api_key_model = db.query(APIKeys).filter(APIKeys.owner_id == user.get('id')).first()
+    if api_key_model is None:
+         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No API Key Found.')
+    length=32
+    new_key = random_generator.generateRandomKey(length)
+    api_key_model.key = new_key
+    db.add(api_key_model)
+    db.commit()
+    return{
+        "message": "Success",
+        "api_key": new_key
+    }
+
+@router.get("/get_api_key", status_code=status.HTTP_200_OK)
+async def get_api_key(db: db_dependency, user: user_dependency):
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication Failed')
+    print(user.get('id'))
+    user_model = db.query(Users).filter(Users.id == user.get('id')).first()
+    api_key_model = db.query(APIKeys).filter(APIKeys.owner_id == user.get('id')).first()
+    if api_key_model is None:
+        await get_new_api_key(db, user_model)
+        api_key_model = db.query(APIKeys).filter(APIKeys.owner_id == user.get('id')).first()
+    return{
+        "message": "Success",
+        "api_key": api_key_model.key,
+        "charge": api_key_model.charge,
+        "renew_date": api_key_model.key_renewal_date,
+        "plan": user_model.plan
     }
