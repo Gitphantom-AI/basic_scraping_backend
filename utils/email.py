@@ -9,7 +9,7 @@ def sendVerificationEmail(verificationCode: str, email: str):
     aws_access_key_id = os.environ['aws_access_key_id']
     aws_secret_access_key = os.environ['aws_secret_access_key']
     
-    SENDER = "anthonywong.hokhei@gmail.com"
+    SENDER = "no-reply@taopulse.io"
     RECIPIENT = email
     AWS_REGION = "us-east-1"
     SUBJECT = "Activate Your Account"
@@ -92,7 +92,7 @@ def sendResetPasswordEmail(token: str, email: str, client_domain: str):
     aws_access_key_id = os.environ['aws_access_key_id']
     aws_secret_access_key = os.environ['aws_secret_access_key']
     
-    SENDER = "anthonywong.hokhei@gmail.com"
+    SENDER = "no-reply@taopulse.io"
     RECIPIENT = email
     AWS_REGION = "us-east-1"
     SUBJECT = "Reset Password"
@@ -174,7 +174,7 @@ def sendChangeEmailEmail(token: str, email: str, server_domain: str):
     aws_access_key_id = os.environ['aws_access_key_id']
     aws_secret_access_key = os.environ['aws_secret_access_key']
     
-    SENDER = "anthonywong.hokhei@gmail.com"
+    SENDER = "no-reply@taopulse.io"
     RECIPIENT = email
     AWS_REGION = "us-east-1"
     SUBJECT = "Change Email Address - Basic Scraping"
