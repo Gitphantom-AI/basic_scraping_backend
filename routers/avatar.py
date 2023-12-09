@@ -42,4 +42,3 @@ async def get_avatar(user: user_dependency, db: db_dependency):
             'message': 'success',
             'avatar_link':user_model.user_image
         }
-

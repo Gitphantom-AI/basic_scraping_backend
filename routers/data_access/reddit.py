@@ -38,7 +38,7 @@ router = APIRouter(
     tags=['reddit']
 )
 
-@router.get("/get_latest_reddit", status_code=status.HTTP_200_OK, response_model=RedditModel,)
+@router.get("/get_latest_reddit", status_code=status.HTTP_200_OK, response_model=RedditModel)
 async def get_latest_reddit(background_tasks: BackgroundTasks, db: db_dependency, api_key: api_key_dependency, pageSize: int = Query(), pageNumber: int = Query(),  sortKey: str | None = Query(default=None), searchKey: str | None = Query(default=None), sortDirection: str| None = Query(default="asc")):
     try:
         
