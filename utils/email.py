@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def sendVerificationEmail(verificationCode: str, email: str):
+def sendVerificationEmail(verificationCode: str, email: str, client_domain: str):
     aws_access_key_id = os.environ['aws_access_key_id']
     aws_secret_access_key = os.environ['aws_secret_access_key']
     
@@ -42,14 +42,15 @@ def sendVerificationEmail(verificationCode: str, email: str):
             The verification code is: <strong>{code}</strong>
             </p>
             <p>
-            <p href="https://your-company.com/signup/email/verify?verificationCode={code}" 
+            
+             <a href="{client_domain}/verification?code={code}"  
                 style="background-color:#ffbe00; color:#000000; display:inline-block; padding:12px 40px 12px 40px; text-align:center; text-decoration:none;" 
                 target="_blank">Verify Email Now</p>
             </p>
         </center>
         </body>
     </html>
-'''.format(code=verificationCode)     
+'''.format(client_domain=client_domain, code=verificationCode)     
     CHARSET = "UTF-8"
     client = boto3.client('ses',region_name=AWS_REGION,
     aws_access_key_id=aws_access_key_id,

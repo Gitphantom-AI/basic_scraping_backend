@@ -126,7 +126,8 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
     db.commit()
     await get_new_api_key(db, create_user_model)
     token = auth.create_access_token(create_user_model.username, create_user_model.id, timedelta(minutes=180), create_user_model.activated, create_user_model.email)
-    email.sendVerificationEmail(otp, create_user_request.email)
+    client_domain = os.environ['client_domain']
+    email.sendVerificationEmail(otp, create_user_request.email, client_domain)
     
     return {
         'access_token': token, 
@@ -200,7 +201,8 @@ async def verifyCode(user: user_dependency_without_verification, db: db_dependen
     user_model.verification_expires=datetime.utcnow() + timedelta(minutes=20)
     db.add(user_model)
     db.commit()
-    email.sendVerificationEmail(otp, user_model.email)
+    client_domain = os.environ['client_domain']
+    email.sendVerificationEmail(otp, create_user_request.email, client_domain)
 
 @router.post("/register-google", response_model=Token)
 async def googleLogin(request_code: GoogleLoginRequest, db: db_dependency):
@@ -245,7 +247,8 @@ async def googleLogin(request_code: GoogleLoginRequest, db: db_dependency):
         db.commit()
         await get_new_api_key(db, create_user_model)
         token = auth.create_access_token(create_user_model.username, create_user_model.id, timedelta(minutes=180), create_user_model.activated, userEmail)
-        email.sendVerificationEmail(otp, create_user_model.email)
+        client_domain = os.environ['client_domain']
+        email.sendVerificationEmail(otp, create_user_model.email, client_domain)
         return {
                 'access_token': token, 
                 'token_type':'bearer', 
