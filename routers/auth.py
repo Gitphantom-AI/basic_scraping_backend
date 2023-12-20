@@ -202,7 +202,7 @@ async def verifyCode(user: user_dependency_without_verification, db: db_dependen
     db.add(user_model)
     db.commit()
     client_domain = os.environ['client_domain']
-    email.sendVerificationEmail(otp, create_user_request.email, client_domain)
+    email.sendVerificationEmail(otp, user_model.email, client_domain)
 
 @router.post("/register-google", response_model=Token)
 async def googleLogin(request_code: GoogleLoginRequest, db: db_dependency):

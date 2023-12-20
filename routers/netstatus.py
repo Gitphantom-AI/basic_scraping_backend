@@ -30,6 +30,11 @@ user_dependency = Annotated[dict, Depends(get_current_user)]
 async def proxy(user: user_dependency, db: db_dependency):
      if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication Failed')
-     res = requests.get("http://139.180.214.224:8000/metagraph/3") 
-     return {"data": res.text}
+     try:
+         res = requests.get("http://139.180.214.224:8000/metagraph/3")
+         return {"data": res.text}
+     except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch data.")
+
+     
      

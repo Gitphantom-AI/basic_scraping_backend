@@ -12,11 +12,10 @@ def sendVerificationEmail(verificationCode: str, email: str, client_domain: str)
     SENDER = "no-reply@taopulse.io"
     RECIPIENT = email
     AWS_REGION = "us-east-1"
-    SUBJECT = "Activate Your Account"
+    SUBJECT = "Activate Your Account - TAO Pulse"
 
     # The email body for recipients with non-HTML email clients.
-    BODY_TEXT = ("Please open email to see the message."
-                )
+    BODY_TEXT = ("Please open email to see the message.")
                 
     # The HTML body of the email.
     BODY_HTML = '''
@@ -36,7 +35,7 @@ def sendVerificationEmail(verificationCode: str, email: str, client_domain: str)
         <body>
         <center>
             <p>
-            Welcome to Basic Scraping. To verify your email, please click on the link below:
+            Welcome to taopulse.io. To verify your email, please click on the link below:
             </p>
             <p>
             The verification code is: <strong>{code}</strong>
@@ -96,11 +95,10 @@ def sendResetPasswordEmail(token: str, email: str, client_domain: str):
     SENDER = "no-reply@taopulse.io"
     RECIPIENT = email
     AWS_REGION = "us-east-1"
-    SUBJECT = "Reset Password"
+    SUBJECT = "Reset Password - TAO Pulse"
 
     # The email body for recipients with non-HTML email clients.
-    BODY_TEXT = ("Please open email to see the message."
-                )
+    BODY_TEXT = ("Please open email to see the message.")
                 
     # The HTML body of the email.
     BODY_HTML = '''
@@ -178,7 +176,7 @@ def sendChangeEmailEmail(token: str, email: str, server_domain: str):
     SENDER = "no-reply@taopulse.io"
     RECIPIENT = email
     AWS_REGION = "us-east-1"
-    SUBJECT = "Change Email Address - Basic Scraping"
+    SUBJECT = "Change Email Address - TAO Pulse"
 
     # The email body for recipients with non-HTML email clients.
     BODY_TEXT = ("Please open email to see the message.")
@@ -201,7 +199,7 @@ def sendChangeEmailEmail(token: str, email: str, server_domain: str):
         <body>
         <center>
             <p>
-           We have received request to change your email address for our services to this new email address. If you didn't request for a change of email address, please ignore this email.
+                We have received request to change your email address for our services to this new email address. If you didn't request for a change of email address, please ignore this email.
             </p>
           
             <p>
