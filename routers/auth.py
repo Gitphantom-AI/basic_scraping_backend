@@ -92,7 +92,7 @@ async def get_user():
 async def create_user(db: db_dependency, create_user_request: CreateUserRequest):
     
     if not regex.verify_password_schema(create_user_request.password):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='Password must contain a number, a capital letter, and a small letter without space.')
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='"Password must contain a number, a letter, and a special character."')
    
     if not regex.verify_email_schema(create_user_request.email):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='Please enter a valid email address.')
