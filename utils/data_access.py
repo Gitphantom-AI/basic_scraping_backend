@@ -24,9 +24,9 @@ s3_client = session.client('s3',
                 aws_secret_access_key=SECRET_KEY)
 
 @timing
-async def get_files_name(sortKey, searchKey, sortDirection, lower_bound, upper_bound, source_name):
+async def get_files_name(sortKey, searchKey, sortDirection, lower_bound, upper_bound, source_name, collection):
     try:
-        scraping_collection = MongoClient['scraping']['scraping']
+        mongo_collection = MongoClient['scraping'][collection]
         first_row_number_of_file = 0
         last_row_number_of_file = 0
         sortDir = 1
@@ -34,24 +34,28 @@ async def get_files_name(sortKey, searchKey, sortDirection, lower_bound, upper_b
             sortDir = -1
         # Filter and sort csv metadata to choose which appropriate csv to fetch
         if sortKey is not None and searchKey is not None:
-            results = scraping_collection.find({"source_name":source_name, "search_keys":[searchKey]}).collation(Collation(locale='en_US', strength=1)).sort(sortKey, sortDir)
+            results = mongo_collection.find({"source_name":source_name, "search_keys":[searchKey]}).collation(Collation(locale='en_US', strength=1)).sort(sortKey, sortDir)
         elif sortKey is not None:
-            results = scraping_collection.find({"source_name":source_name }).sort(sortKey, sortDir)
+            results = mongo_collection.find({"source_name":source_name }).sort(sortKey, sortDir)
         elif searchKey is not None:
-            results = scraping_collection.find({"source_name":source_name, "search_keys":[searchKey]}).collation(Collation(locale='en_US', strength=1))
+            results = mongo_collection.find({"source_name":source_name, "search_keys":[searchKey]}).collation(Collation(locale='en_US', strength=1))
         else:
-            results = scraping_collection.find({"source_name":source_name }).sort("created_at", -1)
+            results = mongo_collection.find({"source_name":source_name }).sort("created_at", -1)
         
         # Get files name of required csv of selected page
         
         file_names = []
+        file_names_with_no_rows = []
 
         # Async for doesn't parallelize the iteration, but using a async source to run
 
         async for cursor in results:
             #print(cursor)
-            # skip small data files
-            if searchKey is None and cursor["row_count"] < 10:
+            # skip small data files / 0 row files
+            if int(cursor["row_count"]) == 0:
+                file_names_with_no_rows.append(cursor["file_name"])
+                continue
+            if searchKey is None and int(cursor["row_count"]) <= 0:
                 continue
             
             first_row_number_of_file = last_row_number_of_file + 1
@@ -59,12 +63,13 @@ async def get_files_name(sortKey, searchKey, sortDirection, lower_bound, upper_b
             if first_row_number_of_file > upper_bound:
                 last_row_number_of_file = first_row_number_of_file - 1
                 break
-            if last_row_number_of_file < lower_bound or int(cursor["row_count"]) == 0:
+            if last_row_number_of_file < lower_bound:
                 continue
             
             else:
                 file_names.append(cursor["file_name"])
-        return last_row_number_of_file, file_names
+        #print(file_names)
+        return last_row_number_of_file, file_names, file_names_with_no_rows
     except Exception as e:
         print("Error: fail to fetch data from Mongodb database.")
         print(e)
@@ -79,19 +84,23 @@ async def get_csv_record(last_row_number_of_file: int, lower_bound : int, upper_
         def download_object(key):
             obj = s3_client.get_object(Bucket=bucket_name, Key=prefix + key)
             df = pd.read_csv(obj['Body'])
+            
             df['csv_file'] = key
             return df
         
         for result in parallel_multithreading(download_object, file_names):
             df = pd.concat([df, result], ignore_index=True)
-
-        # Identify and drop duplicates, keeping the first occurrence
+        
+        # Get the length of duplicate in file only
         duplicates = df[df.duplicated(subset=["url"], keep='first')]
         duplicates_length = len(duplicates.index)
+        
+
+        # Cut the irrelevant rows for response
         total_length = len(df.index)
-        cut_tail = last_row_number_of_file - upper_bound
-        cut_start = total_length - (last_row_number_of_file - lower_bound) - 1
+        cut_tail = max(last_row_number_of_file - upper_bound, 0)
         df.drop(df.tail(cut_tail).index, inplace = True)
+        cut_start = max(total_length - (last_row_number_of_file - lower_bound) - 1, 0)
         df.drop(index=df.index[:cut_start], inplace=True)
         
         #df = add_index_column(df, lower_bound)
@@ -111,3 +120,65 @@ async def add_index_column(df, lower_bound):
     cols = cols[-1:] + cols[:-1]
     df = df[cols]
     return df
+
+def duplicate_check(df:pd.DataFrame, subset: str):
+    # Identify and drop duplicates, keeping the first occurrence
+    
+    duplicated_items = df[df.duplicated(subset=[subset], keep='first')]
+
+    # Drop duplicates from the original DataFrame
+    df = df.drop_duplicates(subset=[subset], keep='first')
+
+    return df, duplicated_items
+
+async def remove_duplicates_from_csv(file_name: str, bucket_name: str, prefix):
+    # get file from s3
+    obj = s3_client.get_object(Bucket=bucket_name, Key=prefix + file_name)
+    df = pd.read_csv(obj['Body'])
+
+    original_length = len(df)
+
+    # Get unique data set from 
+    df, duplicated_items = duplicate_check(df, "url")
+    
+    
+    # If nothing changed, skip
+    if(len(df) == original_length):
+        print("skip updating csv since no rows changed.")
+        return {"success": True, "row_count": len(df), "skip": True}
+    try:
+        print("write to csv")
+        df.to_csv("tmp/" + file_name, index=False)
+        s3_client.upload_file(Key=prefix + file_name, Bucket=bucket_name, Filename="tmp/" + file_name)
+        await os.remove("tmp/" + file_name)
+        return {"success": True, "row_count": len(df), "skip": False}
+    except Exception as e:
+        print(e)
+        {"success": False, "msg": e}
+
+async def update_meta_data(file_name,  row_count, media, collection):
+    mongo_collection = MongoClient['scraping'][collection]
+    try:
+        mongo_collection.update_one({"file_name": file_name, "source_name": media}, { "$set": { "row_count": row_count } })
+        return {"success": True }
+    except Exception as e:
+        print(e)
+        {"success": False, "msg": e}
+
+async def remove_csv(file_name: str, bucket_name: str, prefix):
+    # get file from s3
+    try:
+        obj = s3_client.delete_object(Bucket=bucket_name, Key=prefix + file_name)
+        return {"success": True }
+    except Exception as e:
+        print(e)
+        {"success": False, "msg": e}
+
+async def delete_meta_data(file_name, media, collection):
+    mongo_collection = MongoClient['scraping'][collection]
+    try:
+        mongo_collection.delete_one({"file_name": file_name, "source_name": media})
+        return {"success": True }
+    except Exception as e:
+        print(e)
+        {"success": False, "msg": e}

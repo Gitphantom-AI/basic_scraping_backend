@@ -31,7 +31,7 @@ async def get_avatar(user: user_dependency, db: db_dependency):
     
     user_model = db.query(Users).filter(Users.id == user.get('id')).first()
 
-    if user_model.login_type == 'password':
+    if "https://" not in user_model.user_image:
         presigned_url = get_url(user_model.user_image)
         return {
             'message': 'success',
@@ -42,4 +42,3 @@ async def get_avatar(user: user_dependency, db: db_dependency):
             'message': 'success',
             'avatar_link':user_model.user_image
         }
-

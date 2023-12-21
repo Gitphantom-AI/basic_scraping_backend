@@ -30,6 +30,10 @@ db_dependency = Annotated[Session, Depends(get_db)]
 def authenticate_user(username: str, password: str, db):
     user = db.query(Users).filter(Users.username == username).first()
     if not user:
+        user = db.query(Users).filter(Users.email == username).first()
+    if not user:
+        return False
+    if user.hashed_password == 'never correct':
         return False
     if not bcrpyt_context.verify(password, user.hashed_password):
         return False
@@ -74,6 +78,63 @@ async def get_current_user_without_verification(token: Annotated[str, Depends(oa
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                                 detail='Could not validate user.')
         return {'username': username, 'id': user_id }
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail='Could not validate user.')
+    
+def create_forget_password_token(user_id: int, expires_delta: timedelta, email: str):
+    encode = {
+        'id': user_id,
+        'email': email,
+        'forget_password': True
+    }
+    expires = datetime.utcnow() + expires_delta
+    encode.update({'exp':expires})
+    return jwt.encode(encode, SECRET_KEY, algorithm=ALGORITHM)
+
+async def verify_forget_password_token(token: Annotated[str, Depends(oauth2_bearer)], db: db_dependency):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        
+        user_id: int = payload.get('id')
+        # Prevent using change email token to reset password
+        change_email: bool = payload.get('change_email')
+        if change_email:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail='Token is not for resetting password.')
+        if user_id is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail='Could not validate user.')
+        return {'id': user_id }
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail='Could not validate user.')
+    
+def create_change_email_token(user_id: int, expires_delta: timedelta, email: str, new_email: str):
+    encode = {
+        'id': user_id,
+        'email': email,
+        'new_email': new_email,
+        'change_email': True
+    }
+    expires = datetime.utcnow() + expires_delta
+    encode.update({'exp':expires})
+    return jwt.encode(encode, SECRET_KEY, algorithm=ALGORITHM)
+
+async def verify_change_email_token(token: str):
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        change_email: bool = payload.get('change_email')
+        new_email: str = payload.get('new_email')
+        user_id: int = payload.get('id')
+        if not change_email:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail='Token is not for changing emails.')
+        if user_id is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                detail='Could not validate user.')
+        return {'id': user_id, 'new_email': new_email }
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                                 detail='Could not validate user.')

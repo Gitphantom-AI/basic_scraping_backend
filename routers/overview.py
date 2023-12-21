@@ -8,8 +8,8 @@ from typing import Annotated
 import requests
 
 router = APIRouter(
-    prefix='/netstatus',
-    tags=['netstatus']
+    prefix='/overview',
+    tags=['overview']
 )
 
 def get_db():
@@ -19,22 +19,22 @@ def get_db():
     finally:
         db.close()
 
-class NetStatusTableModel(BaseModel):
-    data: str
 
 db_dependency = Annotated[Session, Depends(get_db)]
 user_dependency = Annotated[dict, Depends(get_current_user)]
 
 
-@router.get("/", status_code=status.HTTP_200_OK, response_model=NetStatusTableModel)
+@router.get("/reddit", status_code=status.HTTP_200_OK, )
 async def proxy(user: user_dependency, db: db_dependency):
      if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication Failed')
-     try:
-         res = requests.get("http://139.180.214.224:8000/metagraph/3")
-         return {"data": res.text}
-     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch data.")
+     res = requests.get("https://api.taopulse.io:8000/reddit/get_preview_reddit") 
+     return {"data": res.text}
+     
 
-     
-     
+@router.get("/twitter", status_code=status.HTTP_200_OK)
+async def proxy(user: user_dependency, db: db_dependency):
+     if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Authentication Failed')
+     res = requests.get("https://api.taopulse.io:8000/twitter/get_preview_twitter") 
+     return {"data": res.text}

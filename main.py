@@ -2,7 +2,7 @@ from typing import Annotated
 from fastapi import FastAPI, Depends
 import server.models as models
 from server.database import engine
-from routers import auth, avatar, netstatus, data_access
+from routers import auth, avatar, netstatus, data_access, overview, api_key
 import routers as router
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -26,5 +26,8 @@ app.include_router(router.router)
 app.include_router(auth.router)
 app.include_router(avatar.router)
 app.include_router(netstatus.router)
+app.include_router(overview.router)
+app.include_router(api_key.router)
 app.include_router(data_access.redditRouter)
 app.include_router(data_access.twitterRouter)
+app.include_router(data_access.testRouter)

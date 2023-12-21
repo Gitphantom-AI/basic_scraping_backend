@@ -43,10 +43,11 @@ Hosting over http, run
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-Hosting over https with ssl certificate
+Hosting over https with ssl certificate (Noted that --host 0.0.0.0 is necessary for remote DNS server to connect)
 
 ```
-uvicorn main:app --port 8000 --ssl-keyfile=/path-to-key.pem --ssl-certfile=/path-to-cert.pem
+uvicorn main:app --port 8000 --host 0.0.0.0 --ssl-keyfile=/path-to-key.pem --ssl-certfile=/path-to-cert.pem
+
 ```
 
 
