@@ -32,13 +32,13 @@ def uploadImage(image_name, image_base64):
     split_tup = os.path.splitext(image_name)
     file_extension = split_tup[1].replace(".", "")
 
-    resized_base64_image = reduce_base64_image_size(image_base64, 256, file_extension)
+    #resized_base64_image = reduce_base64_image_size(image_base64, 256, file_extension)
 
     # Random string to avoid crash of object name
     randomString = str(uuid.uuid4())
     bucket_name = "imageStorage"
     
-    decoded_file = io.BytesIO(base64.b64decode(resized_base64_image))
+    decoded_file = io.BytesIO(base64.b64decode(image_base64))
     s3_client.upload_fileobj(decoded_file, bucket_name, randomString + image_name)
     
 

@@ -107,9 +107,11 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='This email has been registered.')
     
     otp = random_generator.generateRandomCode()
-    
-    user_image = image.uploadImage(create_user_request.image_name, create_user_request.image)
-    
+    if create_user_request.image_name != "default":
+        user_image = image.uploadImage(create_user_request.image_name, create_user_request.image)
+    else:
+        user_image = "blank-profile-picture.png"
+        
     create_user_model = Users(
         email=create_user_request.email,
         username=create_user_request.username,
